@@ -26,15 +26,15 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Unpack finished project
+      - name: Unpack tested project
         shell: bash
         run: |
           cat .bootstrap/chunk-*.txt | base64 --decode > /tmp/wikislider.tar.gz
-          echo "4cc65b6f106ff311a7045c7885933c0d9a262c9c2a75d6d410016239771271e3  /tmp/wikislider.tar.gz" | sha256sum -c -
+          echo "5ece334fa9759c20b4c5e0493390aa3fd6c2be12686520878830016784e04673  /tmp/wikislider.tar.gz" | sha256sum -c -
           tar -xzf /tmp/wikislider.tar.gz -C .
-          test -f package.json
+          test -f app.js
           test -f scripts/crawl.py
-          test -f src/App.tsx
+          test -f public/data/graph.json
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -48,28 +48,30 @@ jobs:
       - name: Test crawler and graph logic
         run: python -m unittest discover -s scripts/tests -v
 
-      - name: Create initial Wikipedia sample
+      - name: Check frontend syntax
+        run: node --check app.js
+
+      - name: Create initial live Wikipedia sample
         run: >
           python scripts/crawl.py
-          --seeds 300
-          --popular 75
+          --seeds 180
+          --popular 40
           --max-depth 80
-          --delay 0.12
+          --delay 0.36
           --output public/data/graph.json
 
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Install frontend dependencies
-        run: npm install
-
-      - name: Test frontend
-        run: npm test
-
-      - name: Build frontend
-        run: npm run build
+      - name: Verify generated dataset
+        shell: bash
+        run: |
+          python -m json.tool public/data/graph.json >/dev/null
+          python - <<'PY'
+          import json
+          data=json.load(open('public/data/graph.json'))
+          assert data['meta']['preview'] is False
+          assert data['meta']['sampled_starts'] == 180
+          assert data['nodes'] and data['edges']
+          print(data['meta'])
+          PY
 
       - name: Remove transfer scaffolding
         shell: bash
